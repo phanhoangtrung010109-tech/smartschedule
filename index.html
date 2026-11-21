@@ -373,15 +373,9 @@ button:active,.tabs button:active{transform:translateY(2px) scale(.988);box-shad
     </div>
 
     <div class="field">
-      <label for="editTeacherSlots">
-        Lịch rảnh giáo viên (mỗi dòng: Thứ 2 18:00-20:00)
-      </label>
-      <textarea id="editTeacherSlots" rows="7"
-        placeholder="Thứ 2 18:00-20:00"></textarea>
-      <p class="small">
-        Mỗi khung giờ một dòng. Ngày hợp lệ: Thứ 2, Thứ 3, Thứ 4,
-        Thứ 5, Thứ 6, Thứ 7, Chủ nhật.
-      </p>
+      <label>Lịch rảnh giáo viên</label>
+      <p class="small">Chọn ngày muốn dạy, thêm khung giờ bằng nút và xóa từng khung giờ khi cần.</p>
+      <div id="editTeacherSchedule" class="days-grid"></div>
     </div>
 
     <h3>Học sinh trong lớp</h3>
@@ -422,6 +416,7 @@ let registerMode = false;
 let teacherDraft = [];
 let studentDraft = [];
 let editingClassId = null;
+let editorTeacherDraft = [];
 let cloudReady = false;
 
 async function apiFetch(path, method="GET", body=null){
@@ -590,16 +585,40 @@ function renderResults(){
 }
 document.getElementById("calculate").onclick=renderResults;document.getElementById("resultClass").onchange=renderResults;
 
+function renderEditorTeacherSchedule(){
+ const root=document.getElementById("editTeacherSchedule");
+ root.innerHTML=DAYS.map((day,i)=>{
+  const active=editorTeacherDraft.some(x=>x.day===i);
+  return `<div class="day-card" data-editor-day-card="${i}"><label style="display:flex;align-items:center;gap:8px;font-weight:700"><input type="checkbox" data-editor-day="${i}" ${active?"checked":""}> ${day}</label><div data-editor-day-content="${i}" style="${active?"":"display:none;"}"><div class="time-inputs"><div><label>Giờ bắt đầu</label><input type="time" data-editor-start="${i}" value="18:00"></div><div><label>Giờ kết thúc</label><input type="time" data-editor-end="${i}" value="20:00"></div></div><button type="button" class="add-btn" data-editor-add="${i}">＋ Thêm khung giờ</button><div data-editor-slots="${i}"></div></div></div>`;
+ }).join("");
+ root.querySelectorAll("[data-editor-day]").forEach(ch=>ch.onchange=()=>{
+  const day=Number(ch.dataset.editorDay),content=root.querySelector(`[data-editor-day-content="${day}"]`);
+  if(ch.checked){content.style.display="";}else{editorTeacherDraft=editorTeacherDraft.filter(x=>x.day!==day);content.style.display="none";}
+  renderEditorTeacherSchedule();
+ });
+ root.querySelectorAll("[data-editor-add]").forEach(btn=>btn.onclick=()=>{
+  const day=Number(btn.dataset.editorAdd),card=root.querySelector(`[data-editor-day-card="${day}"]`),start=card.querySelector(`[data-editor-start="${day}"]`).value,end=card.querySelector(`[data-editor-end="${day}"]`).value;
+  if(!start||!end||start>=end)return notify("Giờ kết thúc phải sau giờ bắt đầu.");
+  if(editorTeacherDraft.some(x=>x.day===day&&start<x.end&&end>x.start))return notify("Khung giờ này bị trùng với lịch đã thêm.");
+  editorTeacherDraft.push({day,start,end});editorTeacherDraft.sort((a,b)=>a.day-b.day||a.start.localeCompare(b.start));renderEditorTeacherSchedule();
+ });
+ DAYS.forEach((_,day)=>{
+  const box=root.querySelector(`[data-editor-slots="${day}"]`),slots=editorTeacherDraft.filter(x=>x.day===day);
+  if(!slots.length){box.innerHTML='<p class="small">Chưa thêm khung giờ.</p>';return;}
+  box.innerHTML=slots.map(x=>`<div class="slot"><span>${esc(x.start)} – ${esc(x.end)}</span><button type="button" data-editor-remove-day="${day}" data-editor-remove-start="${esc(x.start)}" style="background:#b42318">Xóa</button></div>`).join("");
+  box.querySelectorAll("[data-editor-remove-day]").forEach(b=>b.onclick=()=>{const idx=editorTeacherDraft.findIndex(x=>x.day===Number(b.dataset.editorRemoveDay)&&x.start===b.dataset.editorRemoveStart);if(idx>=0)editorTeacherDraft.splice(idx,1);renderEditorTeacherSchedule();});
+ });
+}
 function openClassEditor(id){
  const c=db.classes[id];if(!c||c.teacher!==currentUser)return;editingClassId=id;
- document.getElementById("editClassName").value=c.name;document.getElementById("editClassDuration").value=String(c.duration);document.getElementById("editTeacherSlots").value=slotLines(c.teacherSlots);
+ document.getElementById("editClassName").value=c.name;document.getElementById("editClassDuration").value=String(c.duration);editorTeacherDraft=(c.teacherSlots||[]).map(x=>({...x}));renderEditorTeacherSchedule();
  const box=document.getElementById("editClassStudents");box.innerHTML=!c.students.length?'<p class="muted">Chưa có học sinh.</p>':c.students.map(uid=>`<div class="slot"><span>${esc(db.users[uid]?.fullName||uid)} (${esc(db.users[uid]?.email||uid)})</span><button type="button" data-remove-student="${esc(uid)}" style="background:#b42318">Xóa khỏi lớp</button></div>`).join("");
  box.querySelectorAll("[data-remove-student]").forEach(b=>b.onclick=async()=>{const uid=b.dataset.removeStudent,name=db.users[uid]?.fullName||uid;if(!confirm(`Xóa ${name} khỏi lớp này? Lịch rảnh của học sinh trong lớp sẽ bị xóa.`))return;try{await apiFetch(`/api/classes/${encodeURIComponent(editingClassId)}/students/${encodeURIComponent(uid)}`,"DELETE");await refreshCloudData();openClassEditor(editingClassId);notify("Đã xóa học sinh khỏi lớp.");}catch(e){handleError(e);}});
  document.getElementById("editClassModal").classList.remove("hidden");
 }
 document.getElementById("cancelClassEdit").onclick=()=>{document.getElementById("editClassModal").classList.add("hidden");editingClassId=null;};
 document.getElementById("saveClassEdit").onclick=async()=>{
- const c=db.classes[editingClassId];if(!c||c.teacher!==currentUser)return;const name=document.getElementById("editClassName").value.trim();if(!name)return notify("Hãy nhập tên lớp.");let slots;try{slots=parseSlotLines(document.getElementById("editTeacherSlots").value);}catch(e){return notify(e.message);}
+ const c=db.classes[editingClassId];if(!c||c.teacher!==currentUser)return;const name=document.getElementById("editClassName").value.trim();if(!name)return notify("Hãy nhập tên lớp.");const slots=editorTeacherDraft.map(x=>({...x}));if(!slots.length)return notify("Hãy chọn ít nhất một ngày và thêm khung giờ rảnh.");
  try{await apiFetch(`/api/classes/${encodeURIComponent(editingClassId)}`,"PUT",{name,duration:Number(document.getElementById("editClassDuration").value),teacherSlots:slots});await refreshCloudData();document.getElementById("editClassModal").classList.add("hidden");editingClassId=null;notify("Đã cập nhật lớp học.");}catch(e){handleError(e);}
 };
 document.getElementById("deleteClass").onclick=async()=>{const c=db.classes[editingClassId];if(!c||c.teacher!==currentUser)return;if(!confirm(`Xóa hoàn toàn lớp "${c.name}"? Dữ liệu lịch rảnh của học sinh trong lớp sẽ bị xóa.`))return;try{await apiFetch(`/api/classes/${encodeURIComponent(editingClassId)}`,"DELETE");await refreshCloudData();document.getElementById("editClassModal").classList.add("hidden");editingClassId=null;notify("Đã xóa lớp học.");}catch(e){handleError(e);}};
@@ -681,7 +700,7 @@ auth.onAuthStateChanged(async user=>{
   dpr=Math.min(window.devicePixelRatio||1,1.6);w=window.innerWidth;h=window.innerHeight;
   canvas.width=Math.round(w*dpr);canvas.height=Math.round(h*dpr);canvas.style.width=w+"px";canvas.style.height=h+"px";
   ctx.setTransform(dpr,0,0,dpr,0,0);
-  const count=Math.max(24,Math.min(isSmall()?42:78,Math.floor(w*h/(isSmall()?18000:14500))));
+  const count=Math.max(36,Math.min(isSmall()?63:117,Math.floor(w*h/(isSmall()?18000:14500)*1.5)));
   particles=Array.from({length:count},()=>({x:Math.random()*w,y:Math.random()*h,vx:(Math.random()-.5)*.22,vy:(Math.random()-.5)*.22,r:1.3+Math.random()*1.6,seed:Math.random()*100}));
  }
  function movePointer(e){pointer.x=e.clientX;pointer.y=e.clientY;pointer.active=true;}
