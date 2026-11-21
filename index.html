@@ -129,7 +129,7 @@ hr{border:0;border-top:1px solid var(--line)}
 <style>
 /* Ambient background particles + subtle tactile click feedback */
 body{position:relative;isolation:isolate;overflow-x:hidden}
-#ambientParticles{position:fixed;inset:0;width:100%;height:100%;z-index:0;pointer-events:none;opacity:.72}
+#ambientParticles{position:fixed;inset:0;width:100%;height:100%;z-index:0;pointer-events:none;opacity:.84}
 #loginScreen,#app{position:relative;z-index:1}
 header,main{position:relative;z-index:1}
 button,.card,.day-card,.result-time,.tabs button{transform:translateZ(0);transition:transform .16s ease,box-shadow .16s ease,background-color .16s ease,border-color .16s ease}
@@ -682,7 +682,7 @@ auth.onAuthStateChanged(async user=>{
   canvas.width=Math.round(w*dpr);canvas.height=Math.round(h*dpr);canvas.style.width=w+"px";canvas.style.height=h+"px";
   ctx.setTransform(dpr,0,0,dpr,0,0);
   const count=Math.max(24,Math.min(isSmall()?42:78,Math.floor(w*h/(isSmall()?18000:14500))));
-  particles=Array.from({length:count},()=>({x:Math.random()*w,y:Math.random()*h,vx:(Math.random()-.5)*.22,vy:(Math.random()-.5)*.22,r:1.1+Math.random()*1.5,seed:Math.random()*100}));
+  particles=Array.from({length:count},()=>({x:Math.random()*w,y:Math.random()*h,vx:(Math.random()-.5)*.22,vy:(Math.random()-.5)*.22,r:1.3+Math.random()*1.6,seed:Math.random()*100}));
  }
  function movePointer(e){pointer.x=e.clientX;pointer.y=e.clientY;pointer.active=true;}
  window.addEventListener("pointermove",movePointer,{passive:true});
@@ -708,13 +708,13 @@ auth.onAuthStateChanged(async user=>{
   if(pointer.active){
    const near=[];
    for(const p of particles){const d=Math.hypot(pointer.x-p.x,pointer.y-p.y);if(d<influence)near.push({p,d});}
-   ctx.lineWidth=.7;
+   ctx.lineWidth=.95;
    for(let i=0;i<near.length;i++){
-    const a=near[i];ctx.beginPath();ctx.moveTo(pointer.x,pointer.y);ctx.lineTo(a.p.x,a.p.y);ctx.strokeStyle=`rgba(111,169,221,${.15*(1-a.d/influence)})`;ctx.stroke();
-    for(let j=i+1;j<near.length;j++){const b=near[j],d=Math.hypot(a.p.x-b.p.x,a.p.y-b.p.y);if(d<78){ctx.beginPath();ctx.moveTo(a.p.x,a.p.y);ctx.lineTo(b.p.x,b.p.y);ctx.strokeStyle=`rgba(126,180,222,${.09*(1-d/78)})`;ctx.stroke();}}
+    const a=near[i];ctx.beginPath();ctx.moveTo(pointer.x,pointer.y);ctx.lineTo(a.p.x,a.p.y);ctx.strokeStyle=`rgba(75,145,210,${.24*(1-a.d/influence)})`;ctx.stroke();
+    for(let j=i+1;j<near.length;j++){const b=near[j],d=Math.hypot(a.p.x-b.p.x,a.p.y-b.p.y);if(d<78){ctx.beginPath();ctx.moveTo(a.p.x,a.p.y);ctx.lineTo(b.p.x,b.p.y);ctx.strokeStyle=`rgba(85,155,215,${.15*(1-d/78)})`;ctx.stroke();}}
    }
   }
-  for(const p of particles){ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fillStyle="rgba(116,174,220,.26)";ctx.fill();}
+  for(const p of particles){ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fillStyle="rgba(85,155,215,.40)";ctx.fill();}
   requestAnimationFrame(frame);
  }
  requestAnimationFrame(frame);
