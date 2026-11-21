@@ -126,8 +126,28 @@ hr{border:0;border-top:1px solid var(--line)}
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*::before,*::after{transition:none!important}}
 
 </style>
+<style>
+/* Ambient background particles + subtle tactile click feedback */
+body{position:relative;isolation:isolate;overflow-x:hidden}
+#ambientParticles{position:fixed;inset:0;width:100%;height:100%;z-index:0;pointer-events:none;opacity:.72}
+#loginScreen,#app{position:relative;z-index:1}
+header,main{position:relative;z-index:1}
+button,.card,.day-card,.result-time,.tabs button{transform:translateZ(0);transition:transform .16s ease,box-shadow .16s ease,background-color .16s ease,border-color .16s ease}
+button:active,.tabs button:active{transform:translateY(2px) scale(.988);box-shadow:inset 0 2px 5px rgba(25,30,70,.18),0 1px 2px rgba(25,30,70,.08)!important}
+.card:active,.day-card:active,.result-time:active{transform:translateY(1px) scale(.998);box-shadow:0 4px 12px rgba(40,50,100,.075),inset 0 1px 2px rgba(40,50,100,.035)}
+.profile-modal-card{max-width:520px}
+.profile-modal-card .modal-subtitle{margin:4px 0 18px;color:var(--muted);font-size:13px}
+.profile-modal-card .profile-actions{display:flex;gap:9px;justify-content:flex-end;flex-wrap:wrap;margin-top:20px}
+.profile-modal-card .profile-actions button{min-width:110px}
+.profile-modal-card .password-note{font-size:12px;color:var(--muted);margin:8px 0 0}
+@media(prefers-reduced-motion:reduce){
+  #ambientParticles{display:none}
+  button,.card,.day-card,.result-time,.tabs button{transition:none!important}
+}
+</style>
 </head>
 <body>
+<canvas id="ambientParticles" aria-hidden="true"></canvas>
 
 <section id="loginScreen" style="max-width:430px;margin:8vh auto;padding:16px">
   <div class="card">
@@ -296,6 +316,36 @@ hr{border:0;border-top:1px solid var(--line)}
       Dữ liệu lớp học được lưu trực tuyến và đồng bộ giữa các thiết bị.
     </p>
   </main>
+</div>
+
+<div id="profileModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="profileModalTitle">
+  <div class="card modal-card profile-modal-card" id="profileModalCard">
+    <h2 id="profileModalTitle">Sửa hồ sơ</h2>
+    <p class="modal-subtitle">Cập nhật tên hiển thị hoặc đổi mật khẩu tài khoản.</p>
+    <form id="profileForm">
+      <div class="field">
+        <label for="profileFullName">Họ và tên</label>
+        <input id="profileFullName" autocomplete="name" minlength="2" maxlength="80" required>
+      </div>
+      <div class="field">
+        <label for="profileCurrentPassword">Mật khẩu hiện tại (chỉ cần khi đổi mật khẩu)</label>
+        <input id="profileCurrentPassword" type="password" autocomplete="current-password" placeholder="Nhập mật khẩu hiện tại nếu muốn đổi">
+      </div>
+      <div class="field">
+        <label for="profileNewPassword">Mật khẩu mới (không bắt buộc)</label>
+        <input id="profileNewPassword" type="password" autocomplete="new-password" minlength="6" placeholder="Ít nhất 6 ký tự">
+      </div>
+      <div class="field">
+        <label for="profileConfirmPassword">Xác nhận mật khẩu mới</label>
+        <input id="profileConfirmPassword" type="password" autocomplete="new-password" placeholder="Nhập lại mật khẩu mới">
+      </div>
+      <p class="password-note">Để giữ nguyên mật khẩu, hãy để trống cả hai ô mật khẩu mới.</p>
+      <div class="profile-actions">
+        <button type="button" id="cancelProfileEdit" style="background:#e9ebf4;color:#3e4660;box-shadow:none">Hủy</button>
+        <button type="submit" id="saveProfileButton">Lưu thay đổi</button>
+      </div>
+    </form>
+  </div>
 </div>
 
 <div id="toast"></div>
@@ -554,7 +604,47 @@ document.getElementById("saveClassEdit").onclick=async()=>{
 };
 document.getElementById("deleteClass").onclick=async()=>{const c=db.classes[editingClassId];if(!c||c.teacher!==currentUser)return;if(!confirm(`Xóa hoàn toàn lớp "${c.name}"? Dữ liệu lịch rảnh của học sinh trong lớp sẽ bị xóa.`))return;try{await apiFetch(`/api/classes/${encodeURIComponent(editingClassId)}`,"DELETE");await refreshCloudData();document.getElementById("editClassModal").classList.add("hidden");editingClassId=null;notify("Đã xóa lớp học.");}catch(e){handleError(e);}};
 
-document.getElementById("editProfile").onclick=async()=>{const u=db.users[currentUser],name=prompt("Nhập Họ và tên:",u?.fullName||currentFirebaseUser?.displayName||"");if(name===null)return;if(name.trim().length<2)return notify("Họ và tên cần ít nhất 2 ký tự.");try{await currentFirebaseUser.updateProfile({displayName:name.trim()});await saveProfile(name.trim());await refreshCloudData();showApp();notify("Đã cập nhật hồ sơ.");}catch(e){handleError(e);}};
+const profileModal=document.getElementById("profileModal");
+function openProfileEditor(){
+ const u=db.users[currentUser];
+ document.getElementById("profileFullName").value=u?.fullName||currentFirebaseUser?.displayName||"";
+ ["profileCurrentPassword","profileNewPassword","profileConfirmPassword"].forEach(id=>document.getElementById(id).value="");
+ profileModal.classList.remove("hidden");
+ setTimeout(()=>document.getElementById("profileFullName").focus(),30);
+}
+function closeProfileEditor(){profileModal.classList.add("hidden");document.getElementById("profileForm").reset();}
+document.getElementById("editProfile").onclick=openProfileEditor;
+document.getElementById("cancelProfileEdit").onclick=closeProfileEditor;
+profileModal.addEventListener("click",e=>{if(e.target===profileModal)closeProfileEditor();});
+document.getElementById("profileForm").onsubmit=async e=>{
+ e.preventDefault();
+ const name=document.getElementById("profileFullName").value.trim();
+ const currentPassword=document.getElementById("profileCurrentPassword").value;
+ const newPassword=document.getElementById("profileNewPassword").value;
+ const confirmPassword=document.getElementById("profileConfirmPassword").value;
+ if(name.length<2)return notify("Họ và tên cần ít nhất 2 ký tự.");
+ const changingPassword=Boolean(newPassword||confirmPassword);
+ if(changingPassword){
+  if(!currentPassword)return notify("Hãy nhập mật khẩu hiện tại để xác thực đổi mật khẩu.");
+  if(newPassword.length<6)return notify("Mật khẩu mới cần ít nhất 6 ký tự.");
+  if(newPassword!==confirmPassword)return notify("Mật khẩu mới và xác nhận không khớp.");
+ }
+ const saveButton=document.getElementById("saveProfileButton");saveButton.disabled=true;
+ try{
+  if(changingPassword){
+   const credential=firebase.auth.EmailAuthProvider.credential(currentFirebaseUser.email,currentPassword);
+   await currentFirebaseUser.reauthenticateWithCredential(credential);
+   await currentFirebaseUser.updatePassword(newPassword);
+  }
+  await currentFirebaseUser.updateProfile({displayName:name});
+  await saveProfile(name);
+  await refreshCloudData();showApp();closeProfileEditor();
+  notify(changingPassword?"Đã cập nhật hồ sơ và đổi mật khẩu.":"Đã cập nhật hồ sơ.");
+ }catch(err){
+  const messages={"auth/wrong-password":"Mật khẩu hiện tại không chính xác.","auth/invalid-credential":"Mật khẩu hiện tại không chính xác.","auth/weak-password":"Mật khẩu mới cần ít nhất 6 ký tự.","auth/requires-recent-login":"Hãy đăng xuất rồi đăng nhập lại trước khi đổi mật khẩu.","auth/too-many-requests":"Bạn thử quá nhiều lần. Hãy thử lại sau."};
+  notify(messages[err.code]||err.message||"Không thể cập nhật hồ sơ.");
+ }finally{saveButton.disabled=false;}
+};
 document.getElementById("deleteAccount").onclick=async()=>{if(!confirm("Xóa hoàn toàn tài khoản? Bạn sẽ bị xóa khỏi các lớp đã tham gia và toàn bộ lớp do bạn tạo sẽ bị xóa. Không thể hoàn tác."))return;try{await apiFetch("/api/account","DELETE");await currentFirebaseUser.delete();notify("Đã xóa tài khoản.");}catch(e){handleError(e);}};
 
 function renderAll(){
@@ -579,5 +669,57 @@ auth.onAuthStateChanged(async user=>{
  }catch(e){console.error(e);notify("Không tải được dữ liệu: "+(e.message||"Lỗi máy chủ"));}
 });
 </script>
+<script>
+(()=>{
+ const canvas=document.getElementById("ambientParticles");if(!canvas)return;
+ const ctx=canvas.getContext("2d");if(!ctx)return;
+ const reduced=window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+ if(reduced)return;
+ let w=0,h=0,dpr=1,particles=[],pointer={x:-1000,y:-1000,active:false};
+ const isSmall=()=>window.innerWidth<700;
+ function resize(){
+  dpr=Math.min(window.devicePixelRatio||1,1.6);w=window.innerWidth;h=window.innerHeight;
+  canvas.width=Math.round(w*dpr);canvas.height=Math.round(h*dpr);canvas.style.width=w+"px";canvas.style.height=h+"px";
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  const count=Math.max(24,Math.min(isSmall()?42:78,Math.floor(w*h/(isSmall()?18000:14500))));
+  particles=Array.from({length:count},()=>({x:Math.random()*w,y:Math.random()*h,vx:(Math.random()-.5)*.22,vy:(Math.random()-.5)*.22,r:1.1+Math.random()*1.5,seed:Math.random()*100}));
+ }
+ function movePointer(e){pointer.x=e.clientX;pointer.y=e.clientY;pointer.active=true;}
+ window.addEventListener("pointermove",movePointer,{passive:true});
+ window.addEventListener("pointerleave",()=>{pointer.active=false;},{passive:true});
+ window.addEventListener("blur",()=>{pointer.active=false;});
+ window.addEventListener("resize",resize,{passive:true});resize();
+ let last=0;
+ function frame(time){
+  const dt=Math.min(2,(time-last)/16.67||1);last=time;ctx.clearRect(0,0,w,h);
+  const influence=isSmall()?105:155;
+  for(const p of particles){
+   // Small changing impulses create a soft, non-orbital random drift.
+   p.vx+=(Math.random()-.5)*.018*dt;p.vy+=(Math.random()-.5)*.018*dt;
+   if(pointer.active){const dx=pointer.x-p.x,dy=pointer.y-p.y,dist=Math.hypot(dx,dy)||1;
+    if(dist<influence){const strength=(1-dist/influence)*.0065*dt;p.vx+=dx/dist*strength;p.vy+=dy/dist*strength;}
+   }
+   p.vx*=.994;p.vy*=.994;
+   const speed=Math.hypot(p.vx,p.vy),max=.34;if(speed>max){p.vx=p.vx/speed*max;p.vy=p.vy/speed*max;}
+   p.x+=p.vx*dt;p.y+=p.vy*dt;
+   if(p.x<-12)p.x=w+12;if(p.x>w+12)p.x=-12;if(p.y<-12)p.y=h+12;if(p.y>h+12)p.y=-12;
+  }
+  // Faint links appear only around the cursor, never as a permanent global mesh.
+  if(pointer.active){
+   const near=[];
+   for(const p of particles){const d=Math.hypot(pointer.x-p.x,pointer.y-p.y);if(d<influence)near.push({p,d});}
+   ctx.lineWidth=.7;
+   for(let i=0;i<near.length;i++){
+    const a=near[i];ctx.beginPath();ctx.moveTo(pointer.x,pointer.y);ctx.lineTo(a.p.x,a.p.y);ctx.strokeStyle=`rgba(111,169,221,${.15*(1-a.d/influence)})`;ctx.stroke();
+    for(let j=i+1;j<near.length;j++){const b=near[j],d=Math.hypot(a.p.x-b.p.x,a.p.y-b.p.y);if(d<78){ctx.beginPath();ctx.moveTo(a.p.x,a.p.y);ctx.lineTo(b.p.x,b.p.y);ctx.strokeStyle=`rgba(126,180,222,${.09*(1-d/78)})`;ctx.stroke();}}
+   }
+  }
+  for(const p of particles){ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fillStyle="rgba(116,174,220,.26)";ctx.fill();}
+  requestAnimationFrame(frame);
+ }
+ requestAnimationFrame(frame);
+})();
+</script>
+
 </body>
 </html>
