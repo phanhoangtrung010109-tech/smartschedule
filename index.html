@@ -52,6 +52,31 @@ textarea{width:100%;padding:10px;border:1px solid var(--line);border-radius:8px}
   header{padding:13px}
   h1{font-size:24px}
 }
+
+/* Nút xóa dạng ô vuông: nền đỏ nhạt, viền đỏ đậm */
+button.delete-square{
+  width:42px;
+  height:36px;
+  min-width:42px;
+  padding:0;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  flex:0 0 42px;
+  background:#fff0ef!important;
+  color:#a31717!important;
+  border:1.5px solid #a31717!important;
+  border-radius:6px!important;
+  box-shadow:none!important;
+  font-size:11px!important;
+  font-weight:750!important;
+  line-height:1!important;
+}
+button.delete-square:hover{
+  background:#ffe1de!important;
+  border-color:#7f1010!important;
+}
+
 </style>
 <style>
 /* Giao diện nâng cấp — giữ nguyên HTML, ID và logic JavaScript */
@@ -372,15 +397,15 @@ button:active,.tabs button:active{transform:translateY(2px) scale(.988);box-shad
       </select>
     </div>
 
+    <h3>Học sinh trong lớp</h3>
+    <p class="small">Bạn có thể chọn học sinh để xóa khỏi lớp này.</p>
+    <div id="editClassStudents"></div>
+
     <div class="field">
       <label>Lịch rảnh giáo viên</label>
       <p class="small">Các ngày trong tuần luôn hiển thị. Chỉ cần thêm khung giờ vào ngày muốn dạy; ngày không có khung giờ sẽ không được tính.</p>
       <div id="editTeacherSchedule" class="days-grid"></div>
     </div>
-
-    <h3>Học sinh trong lớp</h3>
-    <p class="small">Bạn có thể chọn học sinh để xóa khỏi lớp này.</p>
-    <div id="editClassStudents"></div>
 
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:16px">
       <button id="saveClassEdit">Lưu thay đổi</button>
@@ -599,14 +624,14 @@ function renderEditorTeacherSchedule(){
  DAYS.forEach((_,day)=>{
   const box=root.querySelector(`[data-editor-slots="${day}"]`),slots=editorTeacherDraft.filter(x=>x.day===day);
   if(!slots.length){box.innerHTML='<p class="small">Chưa thêm khung giờ.</p>';return;}
-  box.innerHTML=slots.map(x=>`<div class="slot"><span>${esc(x.start)} – ${esc(x.end)}</span><button type="button" data-editor-remove-day="${day}" data-editor-remove-start="${esc(x.start)}" style="background:#b42318">Xóa</button></div>`).join("");
+  box.innerHTML=slots.map(x=>`<div class="slot"><span>${esc(x.start)} – ${esc(x.end)}</span><button type="button" class="delete-square" title="Xóa khung giờ" aria-label="Xóa khung giờ" data-editor-remove-day="${day}" data-editor-remove-start="${esc(x.start)}">xóa</button></div>`).join("");
   box.querySelectorAll("[data-editor-remove-day]").forEach(b=>b.onclick=()=>{const idx=editorTeacherDraft.findIndex(x=>x.day===Number(b.dataset.editorRemoveDay)&&x.start===b.dataset.editorRemoveStart);if(idx>=0)editorTeacherDraft.splice(idx,1);renderEditorTeacherSchedule();});
  });
 }
 function openClassEditor(id){
  const c=db.classes[id];if(!c||c.teacher!==currentUser)return;editingClassId=id;
  document.getElementById("editClassName").value=c.name;document.getElementById("editClassDuration").value=String(c.duration);editorTeacherDraft=(c.teacherSlots||[]).map(x=>({...x}));renderEditorTeacherSchedule();
- const box=document.getElementById("editClassStudents");box.innerHTML=!c.students.length?'<p class="muted">Chưa có học sinh.</p>':c.students.map(uid=>`<div class="slot"><span>${esc(db.users[uid]?.fullName||uid)} (${esc(db.users[uid]?.email||uid)})</span><button type="button" data-remove-student="${esc(uid)}" style="background:#b42318">Xóa khỏi lớp</button></div>`).join("");
+ const box=document.getElementById("editClassStudents");box.innerHTML=!c.students.length?'<p class="muted">Chưa có học sinh.</p>':c.students.map(uid=>`<div class="slot"><span>${esc(db.users[uid]?.fullName||uid)} (${esc(db.users[uid]?.email||uid)})</span><button type="button" class="delete-square" title="Xóa học sinh khỏi lớp" aria-label="Xóa học sinh khỏi lớp" data-remove-student="${esc(uid)}">xóa</button></div>`).join("");
  box.querySelectorAll("[data-remove-student]").forEach(b=>b.onclick=async()=>{const uid=b.dataset.removeStudent,name=db.users[uid]?.fullName||uid;if(!confirm(`Xóa ${name} khỏi lớp này? Lịch rảnh của học sinh trong lớp sẽ bị xóa.`))return;try{await apiFetch(`/api/classes/${encodeURIComponent(editingClassId)}/students/${encodeURIComponent(uid)}`,"DELETE");await refreshCloudData();openClassEditor(editingClassId);notify("Đã xóa học sinh khỏi lớp.");}catch(e){handleError(e);}});
  document.getElementById("editClassModal").classList.remove("hidden");
 }
