@@ -374,7 +374,7 @@ button:active,.tabs button:active{transform:translateY(2px) scale(.988);box-shad
 
     <div class="field">
       <label>Lịch rảnh giáo viên</label>
-      <p class="small">Chọn ngày muốn dạy, thêm khung giờ bằng nút và xóa từng khung giờ khi cần.</p>
+      <p class="small">Các ngày trong tuần luôn hiển thị. Chỉ cần thêm khung giờ vào ngày muốn dạy; ngày không có khung giờ sẽ không được tính.</p>
       <div id="editTeacherSchedule" class="days-grid"></div>
     </div>
 
@@ -588,14 +588,8 @@ document.getElementById("calculate").onclick=renderResults;document.getElementBy
 function renderEditorTeacherSchedule(){
  const root=document.getElementById("editTeacherSchedule");
  root.innerHTML=DAYS.map((day,i)=>{
-  const active=editorTeacherDraft.some(x=>x.day===i);
-  return `<div class="day-card" data-editor-day-card="${i}"><label style="display:flex;align-items:center;gap:8px;font-weight:700"><input type="checkbox" data-editor-day="${i}" ${active?"checked":""}> ${day}</label><div data-editor-day-content="${i}" style="${active?"":"display:none;"}"><div class="time-inputs"><div><label>Giờ bắt đầu</label><input type="time" data-editor-start="${i}" value="18:00"></div><div><label>Giờ kết thúc</label><input type="time" data-editor-end="${i}" value="20:00"></div></div><button type="button" class="add-btn" data-editor-add="${i}">＋ Thêm khung giờ</button><div data-editor-slots="${i}"></div></div></div>`;
+  return `<div class="day-card" data-editor-day-card="${i}"><strong style="display:block;margin-bottom:10px">${day}</strong><div data-editor-day-content="${i}"><div class="time-inputs"><div><label>Giờ bắt đầu</label><input type="time" data-editor-start="${i}" value="18:00"></div><div><label>Giờ kết thúc</label><input type="time" data-editor-end="${i}" value="20:00"></div></div><button type="button" class="add-btn" data-editor-add="${i}">＋ Thêm khung giờ</button><div data-editor-slots="${i}"></div></div></div>`;
  }).join("");
- root.querySelectorAll("[data-editor-day]").forEach(ch=>ch.onchange=()=>{
-  const day=Number(ch.dataset.editorDay),content=root.querySelector(`[data-editor-day-content="${day}"]`);
-  if(ch.checked){content.style.display="";}else{editorTeacherDraft=editorTeacherDraft.filter(x=>x.day!==day);content.style.display="none";}
-  renderEditorTeacherSchedule();
- });
  root.querySelectorAll("[data-editor-add]").forEach(btn=>btn.onclick=()=>{
   const day=Number(btn.dataset.editorAdd),card=root.querySelector(`[data-editor-day-card="${day}"]`),start=card.querySelector(`[data-editor-start="${day}"]`).value,end=card.querySelector(`[data-editor-end="${day}"]`).value;
   if(!start||!end||start>=end)return notify("Giờ kết thúc phải sau giờ bắt đầu.");
@@ -618,7 +612,7 @@ function openClassEditor(id){
 }
 document.getElementById("cancelClassEdit").onclick=()=>{document.getElementById("editClassModal").classList.add("hidden");editingClassId=null;};
 document.getElementById("saveClassEdit").onclick=async()=>{
- const c=db.classes[editingClassId];if(!c||c.teacher!==currentUser)return;const name=document.getElementById("editClassName").value.trim();if(!name)return notify("Hãy nhập tên lớp.");const slots=editorTeacherDraft.map(x=>({...x}));if(!slots.length)return notify("Hãy chọn ít nhất một ngày và thêm khung giờ rảnh.");
+ const c=db.classes[editingClassId];if(!c||c.teacher!==currentUser)return;const name=document.getElementById("editClassName").value.trim();if(!name)return notify("Hãy nhập tên lớp.");const slots=editorTeacherDraft.map(x=>({...x}));if(!slots.length)return notify("Hãy thêm ít nhất một khung giờ rảnh.");
  try{await apiFetch(`/api/classes/${encodeURIComponent(editingClassId)}`,"PUT",{name,duration:Number(document.getElementById("editClassDuration").value),teacherSlots:slots});await refreshCloudData();document.getElementById("editClassModal").classList.add("hidden");editingClassId=null;notify("Đã cập nhật lớp học.");}catch(e){handleError(e);}
 };
 document.getElementById("deleteClass").onclick=async()=>{const c=db.classes[editingClassId];if(!c||c.teacher!==currentUser)return;if(!confirm(`Xóa hoàn toàn lớp "${c.name}"? Dữ liệu lịch rảnh của học sinh trong lớp sẽ bị xóa.`))return;try{await apiFetch(`/api/classes/${encodeURIComponent(editingClassId)}`,"DELETE");await refreshCloudData();document.getElementById("editClassModal").classList.add("hidden");editingClassId=null;notify("Đã xóa lớp học.");}catch(e){handleError(e);}};
